@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Moodlight Controller</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <h1>Moodlight Controller</h1>
+    <p class="hint">SoftAP LED control for ESP32-S3 (GPIO4, 10 LEDs)</p>
+    <section class="card">
+      <label class="row">
+        <span>Power</span>
+        <input id="powerOn" type="checkbox">
+      </label>
+      <label class="row">
+        <span>Mode</span>
+        <select id="mode">
+          <option value="single_color">Single Color</option>
+          <option value="palette_breathing">Palette Breathing</option>
+        </select>
+      </label>
+      <label class="row" id="colorRow">
+        <span>Color Wheel</span>
+        <input id="color" type="color" value="#2A7BFF">
+      </label>
+      <label class="row" id="paletteRow">
+        <span>Palette</span>
+        <select id="palette">
+          <option value="sunset">Sunset</option>
+          <option value="ocean">Ocean</option>
+          <option value="forest">Forest</option>
+          <option value="neon">Neon</option>
+        </select>
+      </label>
+      <button id="applyBtn">Apply</button>
+      <p id="status">Ready</p>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
