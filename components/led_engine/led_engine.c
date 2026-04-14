@@ -10,7 +10,7 @@
 #include "led_strip.h"
 
 #define LED_STRIP_GPIO  GPIO_NUM_10
-#define LED_STRIP_COUNT 20
+#define LED_STRIP_COUNT 31
 #define PALETTE_COLOR_COUNT 5
 #define TWO_PI 6.2831853f
 
@@ -130,8 +130,17 @@ esp_err_t led_engine_render(const app_state_t *state)
         }
     } else {
         uint8_t palette_id = state->breathing.palette_id;
-        if (palette_id >= s_palette_count) palette_id = 0;
-        const hsv_palette_t *palette = &s_palettes[palette_id];
+        hsv_palette_t custom_buf;
+        const hsv_palette_t *palette;
+        if (palette_id < s_palette_count) {
+            palette = &s_palettes[palette_id];
+        } else {
+            for (uint8_t k = 0; k < PALETTE_COLOR_COUNT; k++) {
+                custom_buf.colors[k] = state->custom_palette.colors[k];
+            }
+            palette = &custom_buf;
+            palette_id = s_palette_count;
+        }
 
         const float step = 0.03f * (2600.0f / (float)(state->breathing.period_ms ? state->breathing.period_ms : 2600));
         s_breath_phase += step;

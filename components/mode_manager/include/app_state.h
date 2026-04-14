@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define CUSTOM_PALETTE_SIZE 5
+
 typedef enum {
     MODE_SINGLE_COLOR = 0,
     MODE_PALETTE_BREATHING = 1,
@@ -42,11 +44,16 @@ typedef struct {
 } runtime_flags_t;
 
 typedef struct {
+    hsv_t colors[CUSTOM_PALETTE_SIZE];
+} custom_palette_data_t;
+
+typedef struct {
     uint16_t schema_version;
     mood_mode_t mode;
     led_cfg_t led;
     manual_cfg_t manual;
     breathing_cfg_t breathing;
+    custom_palette_data_t custom_palette;
     runtime_flags_t flags;
 } app_state_t;
 
@@ -57,6 +64,7 @@ typedef enum {
     APP_EVT_SET_BRIGHTNESS_CAP,
     APP_EVT_SET_PALETTE,
     APP_EVT_SET_BREATHING_CFG,
+    APP_EVT_SET_CUSTOM_PALETTE,
     APP_EVT_WIFI_STATUS,
     APP_EVT_WEB_CLIENT_STATUS,
     APP_EVT_PERSIST_NOW,
@@ -70,6 +78,7 @@ typedef struct {
         uint8_t palette_id;
         uint8_t brightness_cap;
         breathing_cfg_t breathing;
+        custom_palette_data_t custom_palette;
         bool flag;
     } data;
 } app_event_t;

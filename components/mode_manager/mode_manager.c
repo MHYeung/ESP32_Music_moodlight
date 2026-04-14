@@ -42,7 +42,11 @@ static void mode_task(void *arg)
                 s_state.breathing = event.data.breathing;
                 s_state.flags.nvs_dirty = true;
                 break;
-            case APP_EVT_WIFI_STATUS:
+            case APP_EVT_SET_CUSTOM_PALETTE:
+            s_state.custom_palette = event.data.custom_palette;
+            s_state.flags.nvs_dirty = true;
+            break;
+        case APP_EVT_WIFI_STATUS:
                 s_state.flags.wifi_connected = event.data.flag;
                 break;
             case APP_EVT_WEB_CLIENT_STATUS:
@@ -64,10 +68,15 @@ esp_err_t mode_manager_init(void)
     s_state.schema_version = 1;
     s_state.mode = MODE_SINGLE_COLOR;
     s_state.led.zone_count = 1;
-    s_state.led.led_count_total = 20;
+    s_state.led.led_count_total = 31;
     s_state.led.brightness_cap = 128;
     s_state.manual.color = (hsv_t){.hue = 210, .sat = 255, .val = 100};
     s_state.breathing = (breathing_cfg_t){.period_ms = 2600, .min_val = 16, .max_val = 160, .palette_id = 0};
+    s_state.custom_palette.colors[0] = (hsv_t){.hue =   0, .sat = 255, .val = 200};
+    s_state.custom_palette.colors[1] = (hsv_t){.hue =  30, .sat = 255, .val = 200};
+    s_state.custom_palette.colors[2] = (hsv_t){.hue = 120, .sat = 255, .val = 200};
+    s_state.custom_palette.colors[3] = (hsv_t){.hue = 200, .sat = 255, .val = 200};
+    s_state.custom_palette.colors[4] = (hsv_t){.hue = 280, .sat = 255, .val = 200};
     s_state.flags.power_on = true;
 
     s_event_queue = xQueueCreate(20, sizeof(app_event_t));

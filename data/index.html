@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -8,36 +8,87 @@
 </head>
 <body>
   <main>
-    <h1>Moodlight Controller</h1>
-    <p class="hint">SoftAP LED control for ESP32-S3 (GPIO4, 10 LEDs)</p>
+    <h1>&#127774; Moodlight</h1>
+    <p class="hint">ESP32-S3 &mdash; GPIO10 &mdash; 20 LEDs</p>
+
+    <!-- Power + Mode -->
     <section class="card">
-      <label class="row">
-        <span>Power</span>
-        <input id="powerOn" type="checkbox">
-      </label>
-      <label class="row">
-        <span>Mode</span>
+      <div class="row">
+        <span class="label">Power</span>
+        <label class="toggle">
+          <input id="powerOn" type="checkbox">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="row">
+        <span class="label">Mode</span>
         <select id="mode">
           <option value="single_color">Single Color</option>
           <option value="palette_breathing">Palette Breathing</option>
         </select>
-      </label>
-      <label class="row" id="colorRow">
-        <span>Color Wheel</span>
+      </div>
+    </section>
+
+    <!-- Single Color -->
+    <section class="card" id="colorCard">
+      <h2>Color</h2>
+      <div class="row">
+        <span class="label">Hue</span>
         <input id="color" type="color" value="#2A7BFF">
-      </label>
-      <label class="row" id="paletteRow">
-        <span>Palette</span>
+      </div>
+    </section>
+
+    <!-- Palette Breathing -->
+    <section class="card" id="breathCard">
+      <h2>Palette Breathing</h2>
+      <div class="row">
+        <span class="label">Palette</span>
         <select id="palette">
           <option value="sunset">Sunset</option>
           <option value="ocean">Ocean</option>
           <option value="forest">Forest</option>
           <option value="neon">Neon</option>
+          <option value="custom">&#10024; Custom</option>
         </select>
-      </label>
-      <button id="applyBtn">Apply</button>
-      <p id="status">Ready</p>
+      </div>
+
+      <div class="row">
+        <span class="label">Speed <span class="val" id="periodVal">2.6s</span></span>
+        <input id="period" type="range" min="500" max="8000" step="100" value="2600">
+      </div>
+      <div class="row">
+        <span class="label">Min brightness <span class="val" id="minVal">6%</span></span>
+        <input id="minBright" type="range" min="0" max="255" step="1" value="16">
+      </div>
+      <div class="row">
+        <span class="label">Max brightness <span class="val" id="maxVal">63%</span></span>
+        <input id="maxBright" type="range" min="0" max="255" step="1" value="160">
+      </div>
+
+      <!-- Custom palette swatches -->
+      <div id="customPalette" class="custom-palette">
+        <p class="sublabel">Custom palette slots</p>
+        <div class="swatches">
+          <label class="swatch-wrap"><span>1</span><input class="cp" type="color" value="#ff2200"></label>
+          <label class="swatch-wrap"><span>2</span><input class="cp" type="color" value="#ff8c00"></label>
+          <label class="swatch-wrap"><span>3</span><input class="cp" type="color" value="#22cc44"></label>
+          <label class="swatch-wrap"><span>4</span><input class="cp" type="color" value="#0088ff"></label>
+          <label class="swatch-wrap"><span>5</span><input class="cp" type="color" value="#9933ff"></label>
+        </div>
+      </div>
     </section>
+
+    <!-- Global brightness -->
+    <section class="card">
+      <h2>Brightness</h2>
+      <div class="row">
+        <span class="label">Cap <span class="val" id="brightVal">50%</span></span>
+        <input id="brightness" type="range" min="10" max="255" step="1" value="128">
+      </div>
+    </section>
+
+    <button id="applyBtn">Apply</button>
+    <p id="status" class="status">Ready</p>
   </main>
   <script src="/app.js"></script>
 </body>

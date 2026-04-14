@@ -19,6 +19,7 @@
 #include "nvs_flash.h"
 
 static const char *TAG = "main";
+static bool parse_hex_color(const char *hex, hsv_t *out_color);
 
 #define WIFI_STA_SSID           "ran_gen_gang"
 #define WIFI_STA_PASS           "coinplusfire"
@@ -87,6 +88,7 @@ static uint8_t palette_name_to_id(const char *name)
     if (strcmp(name, "ocean")  == 0) return 1;
     if (strcmp(name, "forest") == 0) return 2;
     if (strcmp(name, "neon")   == 0) return 3;
+    if (strcmp(name, "custom") == 0) return 4;
     return 0;
 }
 
@@ -97,8 +99,28 @@ static const char *palette_id_to_name(uint8_t id)
     case 1: return "ocean";
     case 2: return "forest";
     case 3: return "neon";
+    case 4: return "custom";
     default: return "sunset";
     }
+}
+
+static bool parse_custom_palette(const char *body, custom_palette_data_t *out)
+{
+    const char *p = strstr(body, "\"custom_palette\"");
+    if (!p) return false;
+    p = strchr(p, '[');
+    if (!p) return false;
+    for (int i = 0; i < CUSTOM_PALETTE_SIZE; i++) {
+        const char *hash = strchr(p, '#');
+        if (!hash) return false;
+        char hex[8] = {0};
+        strncpy(hex, hash + 1, 6);
+        hsv_t c;
+        if (!parse_hex_color(hash, &c)) return false;
+        out->colors[i] = c;
+        p = hash + 7;
+    }
+    return true;
 }
 
 static void hsv_to_rgb(const hsv_t *hsv, uint8_t *r, uint8_t *g, uint8_t *b)
@@ -180,23 +202,33 @@ static esp_err_t api_state_handler(httpd_req_t *req)
     ESP_ERROR_CHECK(mode_manager_get_state_snapshot(&state));
     char color_hex[10];
     color_to_hex(&state.manual.color, color_hex, sizeof(color_hex));
-    char payload[320];
+    char cp[CUSTOM_PALETTE_SIZE][10];
+    for (int i = 0; i < CUSTOM_PALETTE_SIZE; i++) {
+        color_to_hex(&state.custom_palette.colors[i], cp[i], sizeof(cp[i]));
+    }
+    char payload[640];
     snprintf(payload, sizeof(payload),
              "{\"mode\":\"%s\",\"power_on\":%s,\"color\":\"%s\",\"palette\":\"%s\","
-             "\"brightness_cap\":%u,\"led_count\":%u}",
+             "\"brightness_cap\":%u,\"led_count\":%u,"
+             "\"period_ms\":%u,\"min_val\":%u,\"max_val\":%u,"
+             "\"custom_palette\":[\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"]}",
              state.mode == MODE_PALETTE_BREATHING ? "palette_breathing" : "single_color",
              state.flags.power_on ? "true" : "false",
              color_hex,
              palette_id_to_name(state.breathing.palette_id),
              state.led.brightness_cap,
-             state.led.led_count_total);
+             state.led.led_count_total,
+             state.breathing.period_ms,
+             state.breathing.min_val,
+             state.breathing.max_val,
+             cp[0], cp[1], cp[2], cp[3], cp[4]);
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, payload);
 }
 
 static esp_err_t api_control_handler(httpd_req_t *req)
 {
-    char body[256] = {0};
+    char body[512] = {0};
     int max_len = req->content_len < (int)(sizeof(body) - 1) ? req->content_len : (int)(sizeof(body) - 1);
     int received = httpd_req_recv(req, body, max_len);
     if (received <= 0) return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid body");
@@ -225,6 +257,32 @@ static esp_err_t api_control_handler(httpd_req_t *req)
     if (extract_json_bool(body, "power_on", &power_on)) {
         app_event_t evt = {.type = APP_EVT_SET_POWER};
         evt.data.flag = power_on;
+        ESP_ERROR_CHECK(post_event(&evt));
+    }
+    char brightness_str[8] = {0};
+    if (extract_json_string(body, "brightness_cap", brightness_str, sizeof(brightness_str))) {
+        app_event_t evt = {.type = APP_EVT_SET_BRIGHTNESS_CAP};
+        evt.data.brightness_cap = (uint8_t)atoi(brightness_str);
+        ESP_ERROR_CHECK(post_event(&evt));
+    }
+    char period_str[8] = {0}, min_str[8] = {0}, max_str[8] = {0};
+    bool has_p = extract_json_string(body, "period_ms", period_str, sizeof(period_str));
+    bool has_n = extract_json_string(body, "min_val",   min_str,    sizeof(min_str));
+    bool has_x = extract_json_string(body, "max_val",   max_str,    sizeof(max_str));
+    if (has_p || has_n || has_x) {
+        app_state_t cur;
+        mode_manager_get_state_snapshot(&cur);
+        app_event_t evt = {.type = APP_EVT_SET_BREATHING_CFG};
+        evt.data.breathing = cur.breathing;
+        if (has_p) evt.data.breathing.period_ms = (uint16_t)atoi(period_str);
+        if (has_n) evt.data.breathing.min_val   = (uint8_t)atoi(min_str);
+        if (has_x) evt.data.breathing.max_val   = (uint8_t)atoi(max_str);
+        ESP_ERROR_CHECK(post_event(&evt));
+    }
+    custom_palette_data_t cp_data = {0};
+    if (parse_custom_palette(body, &cp_data)) {
+        app_event_t evt = {.type = APP_EVT_SET_CUSTOM_PALETTE};
+        evt.data.custom_palette = cp_data;
         ESP_ERROR_CHECK(post_event(&evt));
     }
     httpd_resp_set_type(req, "application/json");
@@ -260,10 +318,13 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         wifi_event_sta_disconnected_t *d = (wifi_event_sta_disconnected_t *)event_data;
         ESP_LOGW(TAG, "WiFi disconnected, reason=%u", d ? d->reason : 0);
+        s_wifi_retry_num = 0;
         if (s_wifi_retry_num < WIFI_MAX_RETRY) {
-            esp_wifi_connect();
             s_wifi_retry_num++;
-            ESP_LOGW(TAG, "Reconnect attempt %d/%d", s_wifi_retry_num, WIFI_MAX_RETRY);
+            ESP_LOGW(TAG, "Reconnect attempt %d/%d (reason=%u)",
+                     s_wifi_retry_num, WIFI_MAX_RETRY, d ? d->reason : 0);
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            esp_wifi_connect();
         } else {
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         }
@@ -299,10 +360,10 @@ static void wifi_init_sta(void)
     wifi_config_t wifi_config = {0};
     snprintf((char *)wifi_config.sta.ssid,     sizeof(wifi_config.sta.ssid),     "%s", WIFI_STA_SSID);
     snprintf((char *)wifi_config.sta.password, sizeof(wifi_config.sta.password), "%s", WIFI_STA_PASS);
-    wifi_config.sta.scan_method          = WIFI_ALL_CHANNEL_SCAN;
+    wifi_config.sta.scan_method          = WIFI_FAST_SCAN;
     wifi_config.sta.sort_method          = WIFI_CONNECT_AP_BY_SIGNAL;
-    wifi_config.sta.threshold.authmode   = WIFI_AUTH_OPEN;
-    wifi_config.sta.pmf_cfg.capable      = true;
+    wifi_config.sta.threshold.authmode   = WIFI_AUTH_WPA2_PSK;
+    wifi_config.sta.pmf_cfg.capable      = false;
     wifi_config.sta.pmf_cfg.required     = false;
     wifi_config.sta.failure_retry_cnt    = WIFI_MAX_RETRY;
 
@@ -310,19 +371,7 @@ static void wifi_init_sta(void)
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
-
-    EventBits_t bits = xEventGroupWaitBits(
-        s_wifi_event_group,
-        WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
-        pdFALSE, pdFALSE,
-        pdMS_TO_TICKS(WIFI_CONNECT_TIMEOUT_MS));
-    if (bits & WIFI_CONNECTED_BIT) {
-        ESP_LOGI(TAG, "WiFi connected.");
-    } else if (bits & WIFI_FAIL_BIT) {
-        ESP_LOGE(TAG, "Failed to connect to '%s'", WIFI_STA_SSID);
-    } else {
-        ESP_LOGE(TAG, "WiFi connection timed out");
-    }
+    ESP_LOGI(TAG, "WiFi stack started. Webserver will launch on IP assignment.");
 }
 
 static void littlefs_mount(void)
