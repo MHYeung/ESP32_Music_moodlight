@@ -10,6 +10,7 @@ idf_component_register(
         esp_http_server
         mode_manager
         led_engine
+        mic_engine
         joltwallet__littlefs
 )
 

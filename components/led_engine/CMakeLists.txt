@@ -1,5 +1,5 @@
 idf_component_register(
     SRCS "led_engine.c"
     INCLUDE_DIRS "include"
-    REQUIRES driver esp_driver_rmt led_strip mode_manager
+    REQUIRES driver esp_driver_rmt led_strip mode_manager esp_timer mic_engine
 )

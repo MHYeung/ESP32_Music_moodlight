@@ -6,8 +6,10 @@
 #define CUSTOM_PALETTE_SIZE 5
 
 typedef enum {
-    MODE_SINGLE_COLOR = 0,
+    MODE_SINGLE_COLOR      = 0,
     MODE_PALETTE_BREATHING = 1,
+    MODE_BEAT_FLASH        = 2,
+    MODE_MUSIC_REACT       = 3,
 } mood_mode_t;
 
 typedef struct {
@@ -35,6 +37,16 @@ typedef struct {
 } breathing_cfg_t;
 
 typedef struct {
+    uint16_t bpm;    /* 40–240 beats per minute */
+    uint8_t  on_pct; /* 1–99 — percentage of beat period LEDs are on */
+} beat_cfg_t;
+
+typedef struct {
+    uint8_t sensitivity;  /* 1–10, scales mic amplitude into brightness */
+    uint8_t noise_floor;  /* raw RMS threshold below which = silence (0–255) */
+} music_cfg_t;
+
+typedef struct {
     bool wifi_connected;
     bool web_client_active;
     bool led_ready;
@@ -53,6 +65,8 @@ typedef struct {
     led_cfg_t led;
     manual_cfg_t manual;
     breathing_cfg_t breathing;
+    beat_cfg_t beat;
+    music_cfg_t music;
     custom_palette_data_t custom_palette;
     runtime_flags_t flags;
 } app_state_t;
@@ -67,6 +81,8 @@ typedef enum {
     APP_EVT_SET_CUSTOM_PALETTE,
     APP_EVT_WIFI_STATUS,
     APP_EVT_WEB_CLIENT_STATUS,
+    APP_EVT_SET_BEAT_CFG,
+    APP_EVT_SET_MUSIC_CFG,
     APP_EVT_PERSIST_NOW,
 } app_event_type_t;
 
@@ -78,6 +94,8 @@ typedef struct {
         uint8_t palette_id;
         uint8_t brightness_cap;
         breathing_cfg_t breathing;
+        beat_cfg_t beat;
+        music_cfg_t music_cfg;
         custom_palette_data_t custom_palette;
         bool flag;
     } data;

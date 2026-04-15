@@ -25,11 +25,13 @@
         <select id="mode">
           <option value="single_color">Single Color</option>
           <option value="palette_breathing">Palette Breathing</option>
+          <option value="beat_flash">Beat Flash</option>
+          <option value="music_react">Music React</option>
         </select>
       </div>
     </section>
 
-    <!-- Single Color -->
+    <!-- Single Color / Beat Flash color picker -->
     <section class="card" id="colorCard">
       <h2>Color</h2>
       <div class="row">
@@ -51,7 +53,6 @@
           <option value="custom">&#10024; Custom</option>
         </select>
       </div>
-
       <div class="row">
         <span class="label">Speed <span class="val" id="periodVal">2.6s</span></span>
         <input id="period" type="range" min="500" max="8000" step="100" value="2600">
@@ -64,7 +65,6 @@
         <span class="label">Max brightness <span class="val" id="maxVal">63%</span></span>
         <input id="maxBright" type="range" min="0" max="255" step="1" value="160">
       </div>
-
       <!-- Custom palette swatches -->
       <div id="customPalette" class="custom-palette">
         <p class="sublabel">Custom palette slots</p>
@@ -75,6 +75,33 @@
           <label class="swatch-wrap"><span>4</span><input class="cp" type="color" value="#0088ff"></label>
           <label class="swatch-wrap"><span>5</span><input class="cp" type="color" value="#9933ff"></label>
         </div>
+      </div>
+    </section>
+
+    <!-- Beat Flash -->
+    <section class="card" id="beatCard">
+      <h2>Beat Flash</h2>
+      <div class="row">
+        <span class="label">BPM <span class="val" id="bpmVal">120</span></span>
+        <input id="bpm" type="range" min="40" max="240" step="1" value="120">
+      </div>
+      <div class="row">
+        <span class="label">On time <span class="val" id="beatPctVal">20%</span></span>
+        <input id="beatPct" type="range" min="1" max="99" step="1" value="20">
+      </div>
+    </section>
+
+    <!-- Music React -->
+    <section class="card" id="musicCard">
+      <h2>Music React</h2>
+      <p class="sublabel">INMP441 mic &mdash; amplitude &rarr; brightness &bull; frequency band &rarr; hue</p>
+      <div class="row">
+        <span class="label">Sensitivity <span class="val" id="sensVal">5</span></span>
+        <input id="sensitivity" type="range" min="1" max="10" step="1" value="5">
+      </div>
+      <div class="row">
+        <span class="label">Noise floor <span class="val" id="floorVal">10</span></span>
+        <input id="noiseFloor" type="range" min="0" max="50" step="1" value="10">
       </div>
     </section>
 

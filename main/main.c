@@ -15,6 +15,7 @@
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
 #include "led_engine.h"
+#include "mic_engine.h"
 #include "mode_manager.h"
 #include "nvs_flash.h"
 
@@ -101,6 +102,24 @@ static const char *palette_id_to_name(uint8_t id)
     case 3: return "neon";
     case 4: return "custom";
     default: return "sunset";
+    }
+}
+
+static mood_mode_t mode_name_to_id(const char *name)
+{
+    if (strcmp(name, "palette_breathing") == 0) return MODE_PALETTE_BREATHING;
+    if (strcmp(name, "beat_flash")        == 0) return MODE_BEAT_FLASH;
+    if (strcmp(name, "music_react")       == 0) return MODE_MUSIC_REACT;
+    return MODE_SINGLE_COLOR;
+}
+
+static const char *mode_id_to_name(mood_mode_t mode)
+{
+    switch (mode) {
+    case MODE_PALETTE_BREATHING: return "palette_breathing";
+    case MODE_BEAT_FLASH:        return "beat_flash";
+    case MODE_MUSIC_REACT:       return "music_react";
+    default:                     return "single_color";
     }
 }
 
@@ -206,13 +225,15 @@ static esp_err_t api_state_handler(httpd_req_t *req)
     for (int i = 0; i < CUSTOM_PALETTE_SIZE; i++) {
         color_to_hex(&state.custom_palette.colors[i], cp[i], sizeof(cp[i]));
     }
-    char payload[640];
+    char payload[800];
     snprintf(payload, sizeof(payload),
              "{\"mode\":\"%s\",\"power_on\":%s,\"color\":\"%s\",\"palette\":\"%s\","
              "\"brightness_cap\":%u,\"led_count\":%u,"
              "\"period_ms\":%u,\"min_val\":%u,\"max_val\":%u,"
+             "\"bpm\":%u,\"beat_on_pct\":%u,"
+             "\"music_sensitivity\":%u,\"music_noise_floor\":%u,"
              "\"custom_palette\":[\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"]}",
-             state.mode == MODE_PALETTE_BREATHING ? "palette_breathing" : "single_color",
+             mode_id_to_name(state.mode),
              state.flags.power_on ? "true" : "false",
              color_hex,
              palette_id_to_name(state.breathing.palette_id),
@@ -221,6 +242,10 @@ static esp_err_t api_state_handler(httpd_req_t *req)
              state.breathing.period_ms,
              state.breathing.min_val,
              state.breathing.max_val,
+             state.beat.bpm,
+             state.beat.on_pct,
+             state.music.sensitivity,
+             state.music.noise_floor,
              cp[0], cp[1], cp[2], cp[3], cp[4]);
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, payload);
@@ -237,7 +262,7 @@ static esp_err_t api_control_handler(httpd_req_t *req)
     char mode_name[32] = {0};
     if (extract_json_string(body, "mode", mode_name, sizeof(mode_name))) {
         app_event_t evt = {.type = APP_EVT_SET_MODE};
-        evt.data.mode = (strcmp(mode_name, "palette_breathing") == 0) ? MODE_PALETTE_BREATHING : MODE_SINGLE_COLOR;
+        evt.data.mode = mode_name_to_id(mode_name);
         ESP_ERROR_CHECK(post_event(&evt));
     }
     char color_hex[12] = {0};
@@ -285,6 +310,35 @@ static esp_err_t api_control_handler(httpd_req_t *req)
         evt.data.custom_palette = cp_data;
         ESP_ERROR_CHECK(post_event(&evt));
     }
+
+    /* Beat-flash configuration: bpm and/or beat_on_pct */
+    char bpm_str[8] = {0}, beat_pct_str[8] = {0};
+    bool has_bpm = extract_json_string(body, "bpm",         bpm_str,      sizeof(bpm_str));
+    bool has_pct = extract_json_string(body, "beat_on_pct", beat_pct_str, sizeof(beat_pct_str));
+    if (has_bpm || has_pct) {
+        app_state_t cur;
+        mode_manager_get_state_snapshot(&cur);
+        app_event_t evt = {.type = APP_EVT_SET_BEAT_CFG};
+        evt.data.beat = cur.beat;
+        if (has_bpm) evt.data.beat.bpm    = (uint16_t)atoi(bpm_str);
+        if (has_pct) evt.data.beat.on_pct = (uint8_t)atoi(beat_pct_str);
+        ESP_ERROR_CHECK(post_event(&evt));
+    }
+
+    /* Music-reactive configuration: sensitivity and/or noise_floor */
+    char sens_str[8] = {0}, floor_str[8] = {0};
+    bool has_sens  = extract_json_string(body, "music_sensitivity",  sens_str,  sizeof(sens_str));
+    bool has_floor = extract_json_string(body, "music_noise_floor", floor_str, sizeof(floor_str));
+    if (has_sens || has_floor) {
+        app_state_t cur;
+        mode_manager_get_state_snapshot(&cur);
+        app_event_t evt = {.type = APP_EVT_SET_MUSIC_CFG};
+        evt.data.music_cfg = cur.music;
+        if (has_sens)  evt.data.music_cfg.sensitivity  = (uint8_t)atoi(sens_str);
+        if (has_floor) evt.data.music_cfg.noise_floor  = (uint8_t)atoi(floor_str);
+        ESP_ERROR_CHECK(post_event(&evt));
+    }
+
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, "{\"ok\":true}");
 }
@@ -416,6 +470,9 @@ void app_main(void)
     littlefs_mount();
     wifi_init_sta();
     ESP_ERROR_CHECK(mode_manager_init());
+
+    ESP_ERROR_CHECK(mic_engine_init());
+    ESP_ERROR_CHECK(mic_engine_start());
 
     BaseType_t task_ok = xTaskCreate(led_render_task, "led_render", 4096, NULL, 5, NULL);
     ESP_ERROR_CHECK(task_ok == pdPASS ? ESP_OK : ESP_FAIL);
