@@ -12,12 +12,14 @@
 
 #define LED_STRIP_GPIO      GPIO_NUM_10
 #define LED_STRIP_COUNT     31
+#define STATUS_LED_GPIO     GPIO_NUM_48
 #define PALETTE_COLOR_COUNT 5
 #define TWO_PI              6.2831853f
 #define HUE_ROTATION_STEP   0.5f   /* degrees per render frame (~15 deg/s at 33 ms) */
 
 static const char *TAG = "led_engine";
 static led_strip_handle_t s_strip        = NULL;
+static led_strip_handle_t s_status_strip = NULL;
 static float              s_breath_phase = 0.0f;
 static float              s_hue_offset   = 0.0f;  /* gradient rotation state */
 static float              s_music_hue    = 0.0f;  /* EMA-smoothed hue for MUSIC_REACT */
@@ -85,8 +87,21 @@ esp_err_t led_engine_init(void)
     };
     ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &s_strip));
     ESP_ERROR_CHECK(led_strip_clear(s_strip));
+
+    strip_config.strip_gpio_num = STATUS_LED_GPIO;
+    strip_config.max_leds       = 1;
+    ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &s_status_strip));
+    ESP_ERROR_CHECK(led_strip_clear(s_status_strip));
+
     ESP_LOGI(TAG, "LED engine ready on GPIO%d, %d LEDs", LED_STRIP_GPIO, LED_STRIP_COUNT);
     return ESP_OK;
+}
+
+esp_err_t led_engine_set_status(uint8_t r, uint8_t g, uint8_t b)
+{
+    if (s_status_strip == NULL) return ESP_ERR_INVALID_STATE;
+    ESP_ERROR_CHECK(led_strip_set_pixel(s_status_strip, 0, r, g, b));
+    return led_strip_refresh(s_status_strip);
 }
 
 esp_err_t led_engine_set_all_rgb(uint8_t red, uint8_t green, uint8_t blue)

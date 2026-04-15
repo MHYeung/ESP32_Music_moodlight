@@ -30,7 +30,7 @@ static bool parse_hex_color(const char *hex, hsv_t *out_color);
 #define WIFI_CONNECT_TIMEOUT_MS 30000
 
 static EventGroupHandle_t s_wifi_event_group;
-static int  s_wifi_retry_num  = 0;
+static int  s_wifi_retry_num    = 0;
 static bool s_webserver_started = false;
 static esp_event_handler_instance_t s_wifi_any_id_handler;
 static esp_event_handler_instance_t s_wifi_got_ip_handler;
@@ -374,23 +374,26 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
     (void)arg;
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         ESP_LOGI(TAG, "WiFi STA start, connecting to '%s'", WIFI_STA_SSID);
+        led_engine_set_status(64, 64, 0);   /* yellow — connecting */
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         wifi_event_sta_disconnected_t *d = (wifi_event_sta_disconnected_t *)event_data;
         ESP_LOGW(TAG, "WiFi disconnected, reason=%u", d ? d->reason : 0);
-        s_wifi_retry_num = 0;
         if (s_wifi_retry_num < WIFI_MAX_RETRY) {
             s_wifi_retry_num++;
             ESP_LOGW(TAG, "Reconnect attempt %d/%d (reason=%u)",
                      s_wifi_retry_num, WIFI_MAX_RETRY, d ? d->reason : 0);
-            vTaskDelay(pdMS_TO_TICKS(1000));
+            led_engine_set_status(64, 32, 0);  /* orange — retrying */
             esp_wifi_connect();
         } else {
+            s_wifi_retry_num = 0;
+            led_engine_set_status(64, 0, 0);   /* red — failed */
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         }
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         s_wifi_retry_num = 0;
+        led_engine_set_status(0, 64, 0);       /* green — connected */
         ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
         if (!s_webserver_started) {
             start_webserver();
@@ -422,10 +425,10 @@ static void wifi_init_sta(void)
     snprintf((char *)wifi_config.sta.password, sizeof(wifi_config.sta.password), "%s", WIFI_STA_PASS);
     wifi_config.sta.scan_method          = WIFI_FAST_SCAN;
     wifi_config.sta.sort_method          = WIFI_CONNECT_AP_BY_SIGNAL;
-    wifi_config.sta.threshold.authmode   = WIFI_AUTH_WPA2_PSK;
-    wifi_config.sta.pmf_cfg.capable      = false;
+    wifi_config.sta.threshold.authmode   = WIFI_AUTH_WPA2_WPA3_PSK;
+    wifi_config.sta.pmf_cfg.capable      = true;
     wifi_config.sta.pmf_cfg.required     = false;
-    wifi_config.sta.failure_retry_cnt    = WIFI_MAX_RETRY;
+    wifi_config.sta.failure_retry_cnt    = 1;
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
