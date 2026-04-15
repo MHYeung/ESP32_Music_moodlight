@@ -103,6 +103,15 @@
         <span class="label">Noise floor <span class="val" id="floorVal">10</span></span>
         <input id="noiseFloor" type="range" min="0" max="50" step="1" value="10">
       </div>
+      <div class="row">
+        <span class="label">Smoothing &alpha; <span class="val" id="alphaVal">0.20</span></span>
+        <input id="emaAlpha" type="range" min="1" max="99" step="1" value="20">
+      </div>
+      <p class="sublabel alpha-hint">Low &alpha; = sluggish &nbsp;|&nbsp; High &alpha; = reactive (noisy)</p>
+      <div class="row">
+        <span class="label">Hue spread <span class="val" id="spreadVal">60&deg;</span></span>
+        <input id="hueSpread" type="range" min="0" max="180" step="5" value="60">
+      </div>
     </section>
 
     <!-- Global brightness -->

@@ -12,6 +12,8 @@ const bpmEl         = $("bpm");
 const beatPctEl     = $("beatPct");
 const sensitivityEl = $("sensitivity");
 const noiseFloorEl  = $("noiseFloor");
+const emaAlphaEl    = $("emaAlpha");
+const hueSpreadEl   = $("hueSpread");
 const applyBtnEl    = $("applyBtn");
 const statusEl      = $("status");
 
@@ -31,8 +33,10 @@ maxBrightEl.addEventListener ("input", () => { $("maxVal").textContent     = pct
 brightnessEl.addEventListener("input", () => { $("brightVal").textContent  = pct(brightnessEl.value); });
 bpmEl.addEventListener       ("input", () => { $("bpmVal").textContent     = bpmEl.value; });
 beatPctEl.addEventListener   ("input", () => { $("beatPctVal").textContent = beatPctEl.value + "%"; });
-sensitivityEl.addEventListener("input",() => { $("sensVal").textContent    = sensitivityEl.value; });
-noiseFloorEl.addEventListener ("input",() => { $("floorVal").textContent   = noiseFloorEl.value; });
+sensitivityEl.addEventListener("input", () => { $("sensVal").textContent  = sensitivityEl.value; });
+noiseFloorEl.addEventListener ("input", () => { $("floorVal").textContent  = noiseFloorEl.value; });
+emaAlphaEl.addEventListener   ("input", () => { $("alphaVal").textContent  = (emaAlphaEl.value / 100).toFixed(2); });
+hueSpreadEl.addEventListener  ("input", () => { $("spreadVal").textContent = hueSpreadEl.value + "°"; });
 
 // ── card visibility ─────────────────────────────────────────────────────────
 function refreshVisibility() {
@@ -81,6 +85,12 @@ async function loadState() {
   noiseFloorEl.value = state.music_noise_floor ?? 10;
   $("floorVal").textContent = noiseFloorEl.value;
 
+  emaAlphaEl.value = state.ema_alpha ?? 20;
+  $("alphaVal").textContent = (emaAlphaEl.value / 100).toFixed(2);
+
+  hueSpreadEl.value = state.hue_spread ?? 60;
+  $("spreadVal").textContent = hueSpreadEl.value + "°";
+
   if (Array.isArray(state.custom_palette)) {
     state.custom_palette.forEach((hex, i) => {
       if (cpInputs[i]) cpInputs[i].value = hex;
@@ -105,6 +115,8 @@ async function applyState() {
     beat_on_pct:         parseInt(beatPctEl.value, 10),
     music_sensitivity:   parseInt(sensitivityEl.value, 10),
     music_noise_floor:   parseInt(noiseFloorEl.value, 10),
+    ema_alpha:           parseInt(emaAlphaEl.value, 10),
+    hue_spread:          parseInt(hueSpreadEl.value, 10),
     custom_palette:      cpInputs.map(el => el.value),
   };
 

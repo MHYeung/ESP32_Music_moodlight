@@ -20,6 +20,11 @@ static const char *TAG = "led_engine";
 static led_strip_handle_t s_strip        = NULL;
 static float              s_breath_phase = 0.0f;
 static float              s_hue_offset   = 0.0f;  /* gradient rotation state */
+static float              s_music_hue    = 0.0f;  /* EMA-smoothed hue for MUSIC_REACT */
+
+/* α for hue smoothing — deliberately slower than amplitude EMA so hue glides
+ * between spectral regions rather than snapping between them.               */
+#define MUSIC_HUE_ALPHA  0.06f
 
 typedef struct {
     hsv_t colors[PALETTE_COLOR_COUNT];
@@ -210,25 +215,39 @@ esp_err_t led_engine_render(const app_state_t *state)
 
     /* ── MODE_MUSIC_REACT ──────────────────────────────────────────────── */
     } else if (state->mode == MODE_MUSIC_REACT) {
+        /* Forward user-adjusted EMA alpha to mic_engine before sampling */
+        mic_engine_set_ema_alpha((float)state->music.ema_alpha / 100.0f);
+
         music_analysis_t analysis = {0};
         mic_engine_get_analysis(&analysis);
 
-        /* Map RMS amplitude to brightness, subtract noise floor */
-        int32_t amp_above_floor = (int32_t)analysis.amplitude
-                                  - (int32_t)state->music.noise_floor * 256;
-        if (amp_above_floor < 0) amp_above_floor = 0;
+        /* ── Hue: EMA smooth the weighted_hue via shortest-path interpolation.
+         * Shortest-path is critical here: without it, crossing the 0°/360° seam
+         * causes the smoothed value to spin the long way around the colour wheel. */
+        float raw_hue = (float)analysis.weighted_hue;
+        float dh = raw_hue - s_music_hue;
+        if (dh >  180.0f) dh -= 360.0f;
+        if (dh < -180.0f) dh += 360.0f;
+        s_music_hue = fmodf(s_music_hue + MUSIC_HUE_ALPHA * dh + 360.0f, 360.0f);
 
-        float norm = (float)amp_above_floor / (float)(state->music.sensitivity * 6553);
+        /* ── Brightness: amplitude above noise floor, normalised by sensitivity */
+        int32_t amp_above = (int32_t)analysis.smooth_amplitude
+                            - (int32_t)state->music.noise_floor * 256;
+        if (amp_above < 0) amp_above = 0;
+        float norm = (float)amp_above / (float)(state->music.sensitivity * 6553);
         if (norm > 1.0f) norm = 1.0f;
         uint8_t val = scale_val((uint8_t)(norm * 255.0f), state->led.brightness_cap);
 
-        /* Map dominant frequency band to hue (evenly spaced around wheel) */
-        float hue = (float)analysis.dominant_band * (360.0f / MIC_BAND_COUNT);
-
-        hsv_t color = {.hue = (uint16_t)hue, .sat = 255, .val = val};
-        uint8_t r = 0, g = 0, b = 0;
-        hsv_to_rgb(&color, &r, &g, &b);
+        /* ── Spatial gradient: each LED gets a hue offset from s_music_hue.
+         * LED at position t ∈ [0,1] receives hue shifted by ±(spread/2) degrees,
+         * so the strip shows a smooth colour band centred on the spectral mean. */
+        float spread = (float)state->music.hue_spread;
         for (uint8_t i = 0; i < active_leds; i++) {
+            float t   = (float)i / (float)(active_leds > 1 ? active_leds - 1 : 1);
+            float hue = fmodf(s_music_hue + (t - 0.5f) * spread + 360.0f, 360.0f);
+            hsv_t color = {.hue = (uint16_t)hue, .sat = 255, .val = val};
+            uint8_t r = 0, g = 0, b = 0;
+            hsv_to_rgb(&color, &r, &g, &b);
             led_strip_set_pixel(s_strip, i, r, g, b);
         }
     }

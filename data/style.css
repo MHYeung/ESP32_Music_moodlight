@@ -132,6 +132,8 @@ input[type="range"]::-moz-range-thumb {
 #applyBtn:hover  { background: #1d4ed8; }
 #applyBtn:active { transform: scale(.98); }
 
+.alpha-hint { margin-top: 8px; text-align: center; }
+
 .status {
   text-align: center;
   margin-top: 12px;

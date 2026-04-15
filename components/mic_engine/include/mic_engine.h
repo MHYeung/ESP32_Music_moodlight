@@ -13,8 +13,12 @@
  * Fetch with mic_engine_get_analysis() from any task/context.
  */
 typedef struct {
-    uint16_t amplitude;    /**< RMS amplitude, 0–65535 (16-bit normalised) */
-    uint8_t  dominant_band; /**< Index of loudest FFT band, 0–(MIC_BAND_COUNT-1) */
+    uint16_t amplitude;        /**< Raw RMS amplitude, 0–65535 */
+    uint16_t smooth_amplitude; /**< EMA-smoothed amplitude — use this for LED mapping */
+    uint8_t  dominant_band;    /**< Index of loudest FFT band, 0–(MIC_BAND_COUNT-1) */
+    uint16_t weighted_hue;     /**< Energy-weighted circular mean hue, 0–359 degrees.
+                                 *   All bands vote proportionally to their energy,
+                                 *   computed via atan2(ΣE·sinθ, ΣE·cosθ).          */
 } music_analysis_t;
 
 /**
@@ -38,3 +42,13 @@ esp_err_t mic_engine_stop(void);
  *        Safe to call from any task. Returns zeros if not initialised.
  */
 void mic_engine_get_analysis(music_analysis_t *out);
+
+/**
+ * @brief Update the EMA smoothing factor used inside mic_task.
+ *
+ * @param alpha  Smoothing coefficient in [0.01, 0.99].
+ *               Low α = heavy smoothing (sluggish).
+ *               High α = light smoothing (reactive but noisy).
+ *               Call each render frame so the UI knob takes effect immediately.
+ */
+void mic_engine_set_ema_alpha(float alpha);

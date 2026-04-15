@@ -231,7 +231,7 @@ static esp_err_t api_state_handler(httpd_req_t *req)
              "\"brightness_cap\":%u,\"led_count\":%u,"
              "\"period_ms\":%u,\"min_val\":%u,\"max_val\":%u,"
              "\"bpm\":%u,\"beat_on_pct\":%u,"
-             "\"music_sensitivity\":%u,\"music_noise_floor\":%u,"
+             "\"music_sensitivity\":%u,\"music_noise_floor\":%u,\"ema_alpha\":%u,\"hue_spread\":%u,"
              "\"custom_palette\":[\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"]}",
              mode_id_to_name(state.mode),
              state.flags.power_on ? "true" : "false",
@@ -246,6 +246,8 @@ static esp_err_t api_state_handler(httpd_req_t *req)
              state.beat.on_pct,
              state.music.sensitivity,
              state.music.noise_floor,
+             state.music.ema_alpha,
+             state.music.hue_spread,
              cp[0], cp[1], cp[2], cp[3], cp[4]);
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, payload);
@@ -325,17 +327,21 @@ static esp_err_t api_control_handler(httpd_req_t *req)
         ESP_ERROR_CHECK(post_event(&evt));
     }
 
-    /* Music-reactive configuration: sensitivity and/or noise_floor */
-    char sens_str[8] = {0}, floor_str[8] = {0};
-    bool has_sens  = extract_json_string(body, "music_sensitivity",  sens_str,  sizeof(sens_str));
-    bool has_floor = extract_json_string(body, "music_noise_floor", floor_str, sizeof(floor_str));
-    if (has_sens || has_floor) {
+    /* Music-reactive configuration: sensitivity, noise_floor and/or ema_alpha */
+    char sens_str[8] = {0}, floor_str[8] = {0}, alpha_str[8] = {0}, spread_str[8] = {0};
+    bool has_sens   = extract_json_string(body, "music_sensitivity", sens_str,   sizeof(sens_str));
+    bool has_floor  = extract_json_string(body, "music_noise_floor", floor_str,  sizeof(floor_str));
+    bool has_alpha  = extract_json_string(body, "ema_alpha",         alpha_str,  sizeof(alpha_str));
+    bool has_spread = extract_json_string(body, "hue_spread",        spread_str, sizeof(spread_str));
+    if (has_sens || has_floor || has_alpha || has_spread) {
         app_state_t cur;
         mode_manager_get_state_snapshot(&cur);
         app_event_t evt = {.type = APP_EVT_SET_MUSIC_CFG};
         evt.data.music_cfg = cur.music;
-        if (has_sens)  evt.data.music_cfg.sensitivity  = (uint8_t)atoi(sens_str);
-        if (has_floor) evt.data.music_cfg.noise_floor  = (uint8_t)atoi(floor_str);
+        if (has_sens)   evt.data.music_cfg.sensitivity = (uint8_t)atoi(sens_str);
+        if (has_floor)  evt.data.music_cfg.noise_floor = (uint8_t)atoi(floor_str);
+        if (has_alpha)  evt.data.music_cfg.ema_alpha   = (uint8_t)atoi(alpha_str);
+        if (has_spread) evt.data.music_cfg.hue_spread  = (uint8_t)atoi(spread_str);
         ESP_ERROR_CHECK(post_event(&evt));
     }
 

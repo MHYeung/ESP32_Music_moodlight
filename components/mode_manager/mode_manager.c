@@ -49,6 +49,8 @@ static void nvs_load_settings(app_state_t *s)
     if (nvs_get_u8 (h, "beat_pct",  &u8)  == ESP_OK) s->beat.on_pct           = u8;
     if (nvs_get_u8 (h, "mus_sens",  &u8)  == ESP_OK) s->music.sensitivity     = u8;
     if (nvs_get_u8 (h, "mus_floor", &u8)  == ESP_OK) s->music.noise_floor     = u8;
+    if (nvs_get_u8 (h, "mus_alpha",  &u8) == ESP_OK) s->music.ema_alpha       = u8;
+    if (nvs_get_u8 (h, "mus_spread", &u8) == ESP_OK) s->music.hue_spread      = u8;
 
     size_t cp_len = sizeof(s->custom_palette);
     nvs_get_blob(h, "cp_blob", &s->custom_palette, &cp_len);
@@ -80,6 +82,8 @@ static void nvs_save_settings(const app_state_t *s)
     nvs_set_u8 (h, "beat_pct",  s->beat.on_pct);
     nvs_set_u8 (h, "mus_sens",  s->music.sensitivity);
     nvs_set_u8 (h, "mus_floor", s->music.noise_floor);
+    nvs_set_u8 (h, "mus_alpha",  s->music.ema_alpha);
+    nvs_set_u8 (h, "mus_spread", s->music.hue_spread);
     nvs_set_blob(h, "cp_blob",  &s->custom_palette, sizeof(s->custom_palette));
 
     nvs_commit(h);
@@ -188,7 +192,8 @@ esp_err_t mode_manager_init(void)
     s_state.breathing               = (breathing_cfg_t){.period_ms = 2600, .min_val = 16,
                                                          .max_val = 160, .palette_id = 0};
     s_state.beat                    = (beat_cfg_t){.bpm = 120, .on_pct = 20};
-    s_state.music                   = (music_cfg_t){.sensitivity = 5, .noise_floor = 10};
+    s_state.music                   = (music_cfg_t){.sensitivity = 5, .noise_floor = 10,
+                                                    .ema_alpha = 20, .hue_spread = 60};
     s_state.custom_palette.colors[0] = (hsv_t){.hue =   0, .sat = 255, .val = 200};
     s_state.custom_palette.colors[1] = (hsv_t){.hue =  30, .sat = 255, .val = 200};
     s_state.custom_palette.colors[2] = (hsv_t){.hue = 120, .sat = 255, .val = 200};

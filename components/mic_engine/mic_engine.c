@@ -16,6 +16,7 @@
 #define MIC_SD_IO        GPIO_NUM_8   /* Serial data (SD) */
 
 /* ── Audio capture parameters ────────────────────────────────────────────── */
+#define TWO_PI           6.2831853f
 #define MIC_SAMPLE_RATE  16000
 #define MIC_FFT_SIZE     256         /* Must be power-of-2; governs freq resolution */
 #define MIC_DMA_DESC     4           /* Number of DMA descriptors (ring depth) */
@@ -29,8 +30,13 @@ static TaskHandle_t       s_task_h  = NULL;
 static volatile bool      s_running = false;
 
 /* Shared analysis result, protected by spinlock */
-static portMUX_TYPE      s_lock    = portMUX_INITIALIZER_UNLOCKED;
+static portMUX_TYPE      s_lock     = portMUX_INITIALIZER_UNLOCKED;
 static music_analysis_t  s_analysis = {0};
+
+/* EMA state — alpha is written by the LED render task via mic_engine_set_ema_alpha() */
+static portMUX_TYPE      s_alpha_lock = portMUX_INITIALIZER_UNLOCKED;
+static float             s_ema_alpha  = 0.20f; /* default α=0.20 */
+static float             s_smooth_amp = 0.0f;  /* carries between DMA frames */
 
 /* Static buffers to keep heap / task-stack usage predictable */
 static int32_t s_raw_buf[MIC_FFT_SIZE];
@@ -90,17 +96,45 @@ static void mic_task(void *arg)
             }
         }
 
+        /* Winner-takes-all dominant band (kept for reference) */
         uint8_t dominant = 0;
         for (int b = 1; b < MIC_BAND_COUNT; b++) {
             if (band_energy[b] > band_energy[dominant]) dominant = (uint8_t)b;
         }
 
+        /* Weighted circular mean hue — all bands vote proportionally to energy.
+         * Plain weighted average fails at the 0°/360° seam (e.g. averaging 350° and
+         * 10° gives 180° instead of 0°). The atan2 formulation handles wrap-around
+         * correctly by working in sin/cos space and converting back to degrees. */
+        float sin_sum = 0.0f, cos_sum = 0.0f;
+        for (int b = 0; b < MIC_BAND_COUNT; b++) {
+            float angle = (float)b * (TWO_PI / MIC_BAND_COUNT);
+            sin_sum += band_energy[b] * sinf(angle);
+            cos_sum += band_energy[b] * cosf(angle);
+        }
+        float mean_rad = atan2f(sin_sum, cos_sum);
+        if (mean_rad < 0.0f) mean_rad += TWO_PI;
+        uint16_t w_hue = (uint16_t)(mean_rad * (360.0f / TWO_PI));
+
         uint16_t amp = (uint16_t)(rms * 65535.0f);
-        if (amp > 65534) amp = 65534; /* leave 65535 as sentinel */
+        if (amp > 65534) amp = 65534;
+
+        /* EMA: smooth_amp[n] = α × raw[n] + (1−α) × smooth_amp[n−1]
+         * α is read under a separate lock so the render task can update it
+         * at any time without blocking the analysis path for long. */
+        float alpha;
+        taskENTER_CRITICAL(&s_alpha_lock);
+        alpha = s_ema_alpha;
+        taskEXIT_CRITICAL(&s_alpha_lock);
+
+        s_smooth_amp = alpha * rms + (1.0f - alpha) * s_smooth_amp;
+        uint16_t smooth_amp = (uint16_t)(s_smooth_amp * 65535.0f);
 
         taskENTER_CRITICAL(&s_lock);
-        s_analysis.amplitude     = amp;
-        s_analysis.dominant_band = dominant;
+        s_analysis.amplitude        = amp;
+        s_analysis.smooth_amplitude = smooth_amp;
+        s_analysis.dominant_band    = dominant;
+        s_analysis.weighted_hue     = w_hue;
         taskEXIT_CRITICAL(&s_lock);
     }
 
@@ -200,6 +234,15 @@ esp_err_t mic_engine_stop(void)
     }
     ESP_LOGI(TAG, "mic_engine stopped");
     return ESP_OK;
+}
+
+void mic_engine_set_ema_alpha(float alpha)
+{
+    if (alpha < 0.01f) alpha = 0.01f;
+    if (alpha > 0.99f) alpha = 0.99f;
+    taskENTER_CRITICAL(&s_alpha_lock);
+    s_ema_alpha = alpha;
+    taskEXIT_CRITICAL(&s_alpha_lock);
 }
 
 void mic_engine_get_analysis(music_analysis_t *out)
