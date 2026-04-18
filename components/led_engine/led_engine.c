@@ -4,6 +4,7 @@
 
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_random.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -22,15 +23,24 @@ static led_strip_handle_t s_strip = NULL;
 static led_strip_handle_t s_status_strip = NULL;
 static float s_breath_phase = 0.0f;
 static float s_hue_offset = 0.0f; /* gradient rotation state */
-static float s_music_hue = 0.0f;  /* EMA-smoothed hue for MUSIC_REACT */
-static float s_music_peak = 0.0f; /* Peak-followed normalised amplitude for MUSIC_REACT */
+static float    s_music_hue             = 0.0f;  /* EMA-smoothed displayed hue */
+static float    s_music_peak            = 0.0f;  /* Peak-followed normalised amplitude */
+static float    s_music_target_hue      = 0.0f;  /* Random target the EMA is chasing */
+static uint64_t s_music_target_next_us  = 0;     /* When to re-roll the target */
 
-/* α for hue smoothing — deliberately slower than amplitude EMA so hue glides
- * between spectral regions rather than snapping between them.               */
-#define MUSIC_HUE_ALPHA 0.06f
-#define MUSIC_PEAK_DECAY 0.92f
-#define MUSIC_MIN_HEIGHT_PCT 20 /* minimum percentage of LEDs to light up */
-#define MUSIC_MIN_VAL 40
+/* α for hue smoothing — slow enough that transitions between random targets
+ * feel like a smooth colour wash rather than teleporting between values.   */
+#define MUSIC_HUE_ALPHA          0.03f
+#define MUSIC_PEAK_DECAY         0.92f
+#define MUSIC_MIN_HEIGHT_PCT     20   /* minimum percentage of LEDs to light up */
+#define MUSIC_MIN_VAL            40
+
+/* Random-target interval window. Each time the timer expires we pick a new
+ * random hue AND a new random duration in this range, so the colour rhythm
+ * isn't metronomic. 3 s min keeps transitions readable; 8 s max prevents a
+ * stuck hue when the user is just sitting with music on.                   */
+#define MUSIC_HUE_RETARGET_MIN_US  3000000ULL
+#define MUSIC_HUE_RETARGET_MAX_US  8000000ULL
 
 typedef struct
 {
@@ -172,23 +182,16 @@ esp_err_t led_engine_render(const app_state_t *state)
         active_leds = LED_STRIP_COUNT;
     }
 
-    /* Power-off: blank both the main strip AND the onboard status LED so the
-     * device visibly goes dark. The status LED is otherwise driven by Wi-Fi
-     * events (yellow/orange/red/green), but when the user kills power we
-     * want "all LEDs off" to mean literally all LEDs. */
+    /* Power-off: blank the main strip only. The onboard status LED on GPIO48
+     * keeps showing Wi-Fi state (yellow=connecting, green=connected, red=fail)
+     * regardless of power_on, so the user always has a network indicator. */
     if (!state->flags.power_on)
     {
         for (uint8_t i = 0; i < LED_STRIP_COUNT; i++)
         {
             led_strip_set_pixel(s_strip, i, 0, 0, 0);
         }
-        esp_err_t r = led_strip_refresh(s_strip);
-        if (s_status_strip != NULL)
-        {
-            led_strip_set_pixel(s_status_strip, 0, 0, 0, 0);
-            led_strip_refresh(s_status_strip);
-        }
-        return r;
+        return led_strip_refresh(s_strip);
     }
 
     /* ── MODE_SINGLE_COLOR ─────────────────────────────────────────────── */
@@ -301,15 +304,21 @@ esp_err_t led_engine_render(const app_state_t *state)
         music_analysis_t analysis = {0};
         mic_engine_get_analysis(&analysis);
 
-        /* ── Hue: EMA smooth the weighted_hue via shortest-path interpolation.
-         * Shortest-path is critical here: without it, crossing the 0°/360° seam
-         * causes the smoothed value to spin the long way around the colour wheel. */
-        float raw_hue = (float)analysis.weighted_hue;
-        float dh = raw_hue - s_music_hue;
-        if (dh > 180.0f)
-            dh -= 360.0f;
-        if (dh < -180.0f)
-            dh += 360.0f;
+        /* ── Hue: pick a new RANDOM target every few seconds, then EMA-smooth
+         * s_music_hue toward it. This replaces the old weighted_hue tracking,
+         * which tended to lock onto a stable spectral centroid and never move.
+         * Shortest-path interpolation across the 0°/360° seam is still needed
+         * so the wheel doesn't spin the long way around. */
+        uint64_t now_us = (uint64_t)esp_timer_get_time();
+        if (now_us >= s_music_target_next_us) {
+            s_music_target_hue     = (float)(esp_random() % 360u);
+            uint64_t span          = MUSIC_HUE_RETARGET_MAX_US - MUSIC_HUE_RETARGET_MIN_US;
+            s_music_target_next_us = now_us + MUSIC_HUE_RETARGET_MIN_US +
+                                     ((uint64_t)esp_random() % span);
+        }
+        float dh = s_music_target_hue - s_music_hue;
+        if (dh >  180.0f) dh -= 360.0f;
+        if (dh < -180.0f) dh += 360.0f;
         s_music_hue = fmodf(s_music_hue + MUSIC_HUE_ALPHA * dh + 360.0f, 360.0f);
 
         /* ── Brightness: amplitude above noise floor, normalised by sensitivity */

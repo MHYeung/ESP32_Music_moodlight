@@ -4,13 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Moodlight Controller</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <main>
     <h1>&#127774; Moodlight</h1>
-    <p class="hint">ESP32-S3 &mdash; GPIO10 &mdash; 20 LEDs</p>
-
     <!-- Power + Mode -->
     <section class="card">
       <div class="row">
@@ -20,14 +21,11 @@
           <span class="slider"></span>
         </label>
       </div>
-      <div class="row">
-        <span class="label">Mode</span>
-        <select id="mode">
-          <option value="single_color">Single Color</option>
-          <option value="palette_breathing">Palette Breathing</option>
-          <option value="beat_flash">Beat Flash</option>
-          <option value="music_react">Music React</option>
-        </select>
+      <div class="tabs" id="modeTabs" role="tablist">
+        <button class="tab active" type="button" data-mode="single_color"       role="tab">Single</button>
+        <button class="tab"        type="button" data-mode="palette_breathing"  role="tab">Breathe</button>
+        <button class="tab"        type="button" data-mode="beat_flash"         role="tab">Beat</button>
+        <button class="tab"        type="button" data-mode="music_react"        role="tab">Music</button>
       </div>
     </section>
 

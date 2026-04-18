@@ -1,6 +1,7 @@
 const $ = id => document.getElementById(id);
 
-const modeEl        = $("mode");
+const modeTabsEl    = $("modeTabs");
+const tabEls        = Array.from(modeTabsEl.querySelectorAll(".tab"));
 const colorEl       = $("color");
 const paletteEl     = $("palette");
 const powerOnEl     = $("powerOn");
@@ -36,9 +37,20 @@ sensitivityEl.addEventListener("input", () => { $("sensVal").textContent  = sens
 noiseFloorEl.addEventListener ("input", () => { $("floorVal").textContent  = noiseFloorEl.value; });
 emaAlphaEl.addEventListener   ("input", () => { $("alphaVal").textContent  = (emaAlphaEl.value / 100).toFixed(2); });
 
+// ── mode tab controller ─────────────────────────────────────────────────────
+/* Single source of truth for mode is the .active tab's data-mode attribute.
+ * getMode() reads it, setMode() updates the visual active state (no event). */
+function getMode() {
+  const active = modeTabsEl.querySelector(".tab.active");
+  return active ? active.dataset.mode : "single_color";
+}
+function setMode(mode) {
+  tabEls.forEach(t => t.classList.toggle("active", t.dataset.mode === mode));
+}
+
 // ── card visibility ─────────────────────────────────────────────────────────
 function refreshVisibility() {
-  const mode = modeEl.value;
+  const mode = getMode();
   // Color picker is shared by Single Color and Beat Flash (flash uses manual color)
   colorCardEl.style.display  = (mode === "single_color" || mode === "beat_flash") ? "block" : "none";
   breathCardEl.style.display = mode === "palette_breathing" ? "block" : "none";
@@ -46,7 +58,19 @@ function refreshVisibility() {
   musicCardEl.style.display  = mode === "music_react"       ? "block" : "none";
   customPalEl.style.display  = (mode === "palette_breathing" && paletteEl.value === "custom") ? "block" : "none";
 }
-modeEl.addEventListener   ("change", refreshVisibility);
+
+/* Tabs are top-level navigation like the power switch: clicking one should
+ * change the device mode immediately, not wait for the Apply button. */
+tabEls.forEach(tab => {
+  tab.addEventListener("click", () => {
+    setMode(tab.dataset.mode);
+    refreshVisibility();
+    applyState().catch(() => {
+      statusEl.textContent = "Connection error";
+      statusEl.className   = "status err";
+    });
+  });
+});
 paletteEl.addEventListener("change", refreshVisibility);
 
 // ── load state from ESP ─────────────────────────────────────────────────────
@@ -54,7 +78,7 @@ async function loadState() {
   const res   = await fetch("/api/state", { cache: "no-store" });
   const state = await res.json();
 
-  modeEl.value      = state.mode      || "single_color";
+  setMode(state.mode || "single_color");
   colorEl.value     = state.color     || "#2A7BFF";
   paletteEl.value   = state.palette   || "sunset";
   powerOnEl.checked = !!state.power_on;
@@ -98,7 +122,7 @@ async function loadState() {
 // ── apply state to ESP ──────────────────────────────────────────────────────
 async function applyState() {
   const payload = {
-    mode:                modeEl.value,
+    mode:                getMode(),
     power_on:            powerOnEl.checked,
     color:               colorEl.value,
     palette:             paletteEl.value,
