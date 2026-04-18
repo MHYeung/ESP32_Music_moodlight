@@ -13,7 +13,6 @@ const beatPctEl     = $("beatPct");
 const sensitivityEl = $("sensitivity");
 const noiseFloorEl  = $("noiseFloor");
 const emaAlphaEl    = $("emaAlpha");
-const hueSpreadEl   = $("hueSpread");
 const applyBtnEl    = $("applyBtn");
 const statusEl      = $("status");
 
@@ -36,7 +35,6 @@ beatPctEl.addEventListener   ("input", () => { $("beatPctVal").textContent = bea
 sensitivityEl.addEventListener("input", () => { $("sensVal").textContent  = sensitivityEl.value; });
 noiseFloorEl.addEventListener ("input", () => { $("floorVal").textContent  = noiseFloorEl.value; });
 emaAlphaEl.addEventListener   ("input", () => { $("alphaVal").textContent  = (emaAlphaEl.value / 100).toFixed(2); });
-hueSpreadEl.addEventListener  ("input", () => { $("spreadVal").textContent = hueSpreadEl.value + "°"; });
 
 // ── card visibility ─────────────────────────────────────────────────────────
 function refreshVisibility() {
@@ -88,9 +86,6 @@ async function loadState() {
   emaAlphaEl.value = state.ema_alpha ?? 20;
   $("alphaVal").textContent = (emaAlphaEl.value / 100).toFixed(2);
 
-  hueSpreadEl.value = state.hue_spread ?? 60;
-  $("spreadVal").textContent = hueSpreadEl.value + "°";
-
   if (Array.isArray(state.custom_palette)) {
     state.custom_palette.forEach((hex, i) => {
       if (cpInputs[i]) cpInputs[i].value = hex;
@@ -116,7 +111,6 @@ async function applyState() {
     music_sensitivity:   parseInt(sensitivityEl.value, 10),
     music_noise_floor:   parseInt(noiseFloorEl.value, 10),
     ema_alpha:           parseInt(emaAlphaEl.value, 10),
-    hue_spread:          parseInt(hueSpreadEl.value, 10),
     custom_palette:      cpInputs.map(el => el.value),
   };
 
@@ -138,6 +132,15 @@ async function applyState() {
 }
 
 applyBtnEl.addEventListener("click", () =>
+  applyState().catch(() => {
+    statusEl.textContent = "Connection error";
+    statusEl.className   = "status err";
+  })
+);
+
+/* Power toggle is a dedicated kill-switch: apply immediately on change so
+ * users don't have to hit Apply for the lights to actually go off. */
+powerOnEl.addEventListener("change", () =>
   applyState().catch(() => {
     statusEl.textContent = "Connection error";
     statusEl.className   = "status err";

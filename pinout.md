@@ -8,7 +8,7 @@ Update this file if your PCB/wiring changes.
 | Subsystem | Signal | ESP32-S3 GPIO | Connected Device Pin | Function |
 |---|---|---:|---|---|
 | WS2812B LED Strip | LED_DATA | GPIO10 | DIN (first LED) | RMT output for 20-LED chain |
-| Status LED (optional) | STATUS_LED | GPIO2 | LED anode/cathode path | Device status and boot indication |
+| Status LED (optional) | STATUS_LED | GPIO48 | LED anode/cathode path | Device status and boot indication |
 | User Button (optional) | USER_BTN | GPIO0 | Push button | Local mode cycle / safe reset trigger |
 
 ## Power and Ground

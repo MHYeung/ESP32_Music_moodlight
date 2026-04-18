@@ -45,7 +45,6 @@ typedef struct {
     uint8_t sensitivity;  /* 1–10, scales mic amplitude into brightness */
     uint8_t noise_floor;  /* raw RMS threshold below which = silence (0–255) */
     uint8_t ema_alpha;    /* EMA smoothing factor × 100, range 1–99 (e.g. 20 → α=0.20) */
-    uint8_t hue_spread;   /* gradient width in degrees centred on weighted_hue, 0–180 */
 } music_cfg_t;
 
 typedef struct {
